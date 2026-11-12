@@ -13,7 +13,8 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout
+from tensorflow.keras.layers import Embedding, LSTM, Dense, SpatialDropout1D
+from tensorflow.keras.optimizers import Adam
 
 # Configure page style
 st.set_page_config(page_title="NLP Sentiment Analyzer", page_icon="🎬", layout="centered")
@@ -76,22 +77,29 @@ def train_and_initialize_models():
     max_len = 200
     embedding_dim = 128
 
-    lstm_tokenizer = Tokenizer(num_words=max_words)
-    lstm_tokenizer.fit_on_texts(X_train_raw)
-    X_train_seq = pad_sequences(lstm_tokenizer.texts_to_sequences(X_train_raw), maxlen=max_len)
-
+    # Tokenize and Pad Sequences for LSTM
+    tok = Tokenizer(num_words=max_words, oov_token="<OOV>")
+    tok.fit_on_texts(X_train_raw)
+    
+    X_train_seq = pad_sequences(tok.texts_to_sequences(X_train_raw), maxlen=max_len, padding='pre')
+    X_test_seq = pad_sequences(tok.texts_to_sequences(X_test_raw), maxlen=max_len, padding='pre')
+    
+    # Build LSTM Architecture
     lstm_model = Sequential([
         Embedding(max_words, embedding_dim),
-        Dropout(0.3),
+        SpatialDropout1D(0.2),
         LSTM(64, dropout=0.2, recurrent_dropout=0.2),
         Dense(1, activation='sigmoid')
     ])
-    lstm_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     
-    # Train LSTM briefly for demo purposes
-    lstm_model.fit(X_train_seq, y_train, epochs=3, batch_size=64, verbose=0)
+    lstm_model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.09), metrics=['accuracy'])
+    
+    # Train LSTM
+    print("Training LSTM Network...")
+    lstm_model.fit(X_train_seq, y_train, epochs=5, batch_size=64, validation_data=(X_test_seq, y_test), verbose=1)
+    
 
-    return vectorizer, lr_model, nb_model, lstm_tokenizer, lstm_model
+    return vectorizer, lr_model, nb_model, tok, lstm_model
 
 with st.spinner("Training sentiment models from scratch inside the app container... Please wait!"):
     vectorizer, lr_model, nb_model, lstm_tokenizer, lstm_model = train_and_initialize_models()
